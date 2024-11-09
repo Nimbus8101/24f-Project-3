@@ -25,7 +25,7 @@
 #include <thread>
 #include <mutex>
 #include <vector>
-#include <semaphore>
+#include <semaphore.h>  //RW
 
 using namespace std;
 
@@ -95,11 +95,9 @@ using namespace std;
 /*
  * Declare global variables here
  */
-mutex mtx;
-
-int numCrossing;
-
-
+mutex mtx; //RW
+sem_t lizSemaphore; //RW
+int maxNumCrossing = 0; //RW
 
 /**************************************************/
 /* Please leave these variables alone.  They are  */
@@ -127,7 +125,7 @@ class Cat {
 	public:
 		Cat (int id);
 		int getId();
-		void run();
+		void runCat();
 		void wait();
     
     private:
@@ -162,8 +160,9 @@ int Cat::getId()
  * 
  * Status: Incomplete - Make changes to this code.
  */
-void Cat::run() 
+void Cat::runCat() 
 {
+_catThread = new thread (catThread, this );
 	 // launch the thread to simulate the cat's behavior	 
 
 }
@@ -175,7 +174,11 @@ void Cat::run()
   */
 void Cat::wait()
 {
+	if (_catThread != NULL) {
+        _catThread->join();
+    } 
 	 // wait for the thread to terminate
+   
 }
 
 
@@ -192,16 +195,21 @@ void Cat::sleepNow()
 
 	if (debug)
     {
+      mtx.lock();
 		cout << "[" << _id << "] cat sleeping for " << sleepSeconds << " seconds" << endl;
 		cout << flush;
+    mtx.unlock();
     }
-
+if(running){
 	sleep( sleepSeconds );
+}
 
 	if (debug)
     {
+    mtx.lock();
 		cout << "[" << _id << "] cat awake" << endl;
 		cout << flush;
+    mtx.unlock();
     }
 }
 
@@ -221,8 +229,10 @@ void Cat::catThread (Cat *aCat)
 	
 	if (debug)
     {
+    mtx.lock();
 		cout << "[" << aCat->getId() << "] cat is alive\n";
 		cout << flush;
+    mtx.unlock();
     }
 
 	while(running)
@@ -317,15 +327,19 @@ void Lizard::sleepNow()
 	sleepSeconds = 1 + (int)(random() / (double)RAND_MAX * MAX_LIZARD_SLEEP);
 
 	if (debug){
+    mtx.lock();
         cout << "[" << _id << "] sleeping for " << sleepSeconds << " seconds" << endl;
         cout << flush;
+        mtx.unlock();
     }
-
+if(running){
 	sleep( sleepSeconds );
-
+}
 	if (debug){
+    mtx.lock();
         cout << "[" << _id << "] awake" << endl;
         cout << flush;
+        mtx.unlock();
     }
 }
 
@@ -336,21 +350,20 @@ void Lizard::sleepNow()
  * Status: Incomplete - Make changes as you see are necessary.
  */
 void Lizard::sago2MonkeyGrassIsSafe(){
+  sem_wait(&lizSemaphore);
 	if (debug){
+    mtx.lock();
 		cout << "[" << _id << "] checking  sago -> monkey grass" << endl;
 		cout << flush;
+    mtx.unlock();
     }
 
-	while(numCrossingSago2MonkeyGrass + numCrossingMonkeyGrass2Sago >= MAX_LIZARD_CROSSING){
-    sleep(0);
-  }
-
-
-	if (debug)
-    {
+	if (debug){
+  mtx.lock();
 		cout << "[" << _id << "] thinks  sago -> monkey grass  is safe" << endl;
 		cout << flush;
     }
+  mtx.unlock();
 }
 
 
@@ -361,8 +374,10 @@ void Lizard::sago2MonkeyGrassIsSafe(){
  */
 void Lizard::crossSago2MonkeyGrass(){
 	if (debug){
+    mtx.lock();
         cout << "[" << _id << "] crossing  sago -> monkey grass" << endl;
         cout << flush;
+        mtx.unlock();
     }
 
 	/*
@@ -370,7 +385,9 @@ void Lizard::crossSago2MonkeyGrass(){
 	 */
   mtx.lock();
 	numCrossingSago2MonkeyGrass++;
-  mtx.unlock();
+if(numCrossingMonkeyGrass2Sago + numCrossingSago2MonkeyGrass > maxNumCrossing){
+  maxNumCrossing = numCrossingMonkeyGrass2Sago + numCrossingSago2MonkeyGrass;
+}
 
 	/*
      * Check for lizards cross both ways
@@ -381,12 +398,13 @@ void Lizard::crossSago2MonkeyGrass(){
 		cout << "\t" << numCrossingMonkeyGrass2Sago << " crossing monkey grass -> sago" << endl;
 		exit( -1 );
     }
-
+  mtx.unlock();
 	/*
      * It takes a while to cross, so simulate it
      */
+  if(running){
 	sleep( CROSS_SECONDS );
-
+  }
     /*
      * That one seems to have made it
      */
@@ -405,11 +423,15 @@ void Lizard::madeIt2MonkeyGrass()
 	/*
      * Whew, made it across
      */
+
 	if (debug){
+    mtx.lock();
 		cout << "[" << _id << "] made the  sago -> monkey grass  crossing" << endl;
 		cout << flush;
+        mtx.unlock();
     }
 
+sem_post(&lizSemaphore);
 
 
 
@@ -428,19 +450,24 @@ void Lizard::eat(){
 
 	if (debug)
     {
+      mtx.lock();
 		cout << "[" << _id << "] eating for " << eatSeconds << " seconds" << endl;
 		cout << flush;
+    mtx.unlock();
     }
 
 	/*
      * Simulate eating by blocking for a few seconds
      */
+  if(running){
 	sleep( eatSeconds );
-
+  }
 	if (debug)
     {
+      mtx.lock();
         cout << "[" << _id << "] finished eating" << endl;
         cout << flush;
+        mtx.unlock();
     }
 }
 
@@ -452,19 +479,23 @@ void Lizard::eat(){
  */
 void Lizard::monkeyGrass2SagoIsSafe()
 {
+  sem_wait(&lizSemaphore);
+
 	if (debug){
+      mtx.lock();
 		cout << "[" << _id << "] checking  monkey grass -> sago" << endl;
 		cout << flush;
+        mtx.unlock();
     }
 
-  while(numCrossingMonkeyGrass2Sago + numCrossingSago2MonkeyGrass >= MAX_LIZARD_CROSSING){
-    sleep(0);
-  }
 
 	if (debug){
+     mtx.lock();
 		cout << "[" << _id << "] thinks  monkey grass -> sago  is safe" << endl;
 		cout << flush;
+        mtx.unlock();
     }
+
 }
 
 
@@ -476,15 +507,20 @@ void Lizard::monkeyGrass2SagoIsSafe()
  */
 void Lizard::crossMonkeyGrass2Sago(){
 	if (debug){
+    mtx.lock();
 		cout << "[" << _id << "] crossing  monkey grass -> sago" << endl;
 		cout << flush;
+    mtx.unlock();
     }
 
     /*
      * One more crossing this way
      */
+  mtx.lock();
 	numCrossingMonkeyGrass2Sago++;
-
+if(numCrossingMonkeyGrass2Sago + numCrossingSago2MonkeyGrass > maxNumCrossing){
+  maxNumCrossing = numCrossingMonkeyGrass2Sago + numCrossingSago2MonkeyGrass;
+}
 
     /*
      * Check for lizards cross both ways
@@ -495,16 +531,19 @@ void Lizard::crossMonkeyGrass2Sago(){
 		cout << "\t " << numCrossingMonkeyGrass2Sago << " crossing monkey grass -> sago" << endl;
 		exit( -1 );
     }
-
+ mtx.unlock();
 	/*
      * It takes a while to cross, so simulate it
      */
+  if(running){
 	sleep( CROSS_SECONDS );
-
+  }
 	/*
      * That one seems to have made it
      */
+  mtx.lock();
 	numCrossingMonkeyGrass2Sago--;
+  mtx.unlock();
 }
 
 
@@ -519,9 +558,13 @@ void Lizard::madeIt2Sago()
      * Whew, made it across
      */
 	if (debug){
+     mtx.lock();
 		cout << "[" << _id << "] made the  monkey grass -> sago  crossing" << endl;
 		cout << flush;
+    mtx.unlock();
     }
+
+      sem_post(&lizSemaphore);
 }
 
 /**
@@ -534,8 +577,10 @@ void Lizard::madeIt2Sago()
   */
 void Lizard::lizardThread(Lizard *aLizard){	
     if (debug){
+      mtx.lock();
         cout << "[" << aLizard->getId() << "] lizard is alive" << endl;
         cout << flush;
+        mtx.unlock();
     }
 
 	while(running){
@@ -546,26 +591,17 @@ void Lizard::lizardThread(Lizard *aLizard){
     * some functions by filling in the code.  Some  
     * are already completed - see the comments.
     */
-
-    
     aLizard->sleepNow();
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    }
-
+    aLizard->sago2MonkeyGrassIsSafe();
+    aLizard->crossSago2MonkeyGrass();
+    aLizard->madeIt2MonkeyGrass();
+    aLizard->eat();
+    aLizard->monkeyGrass2SagoIsSafe();
+    aLizard->crossMonkeyGrass2Sago();
+    aLizard->madeIt2Sago();
+    
+  }
+  return;
 }
 
 
@@ -601,7 +637,6 @@ int main(int argc, char **argv){
 	numCrossingMonkeyGrass2Sago = 0;
 	running = 1;
 
-  numCrossing = 0;
 
 
 	/*
@@ -613,9 +648,7 @@ int main(int argc, char **argv){
 	/*
      * Initialize locks and/or semaphores
      */
-
-    mutex mtx;
-    counting_semaphore<10> semaphore(1);
+sem_init(&lizSemaphore, 0, MAX_LIZARD_CROSSING);
 
 	/*
      * Create NUM_LIZARDS lizard threads
@@ -629,6 +662,10 @@ int main(int argc, char **argv){
     /*
      * Create NUM_CATS cat threads
      */
+     vector<Cat*> Cats;
+     for(int j = 0; j < NUM_CATS; j++){ //RW
+      Cats.push_back(new Cat(j)); //RW
+     }
 
 	/*
 	 * Run NUM_LIZARDS and NUM_CATS threads
@@ -636,12 +673,14 @@ int main(int argc, char **argv){
     for (int i=0; i < NUM_LIZARDS; i++) {
         allLizards[i]->run();
     }
+    for (int j = 0; j < NUM_CATS; j++) {  //RW
+    Cats[j]->runCat(); //RW
+    }
 
 	/*
      * Now let the world run for a while
      */
-	sleep( WORLDEND );
-
+	sleep(WORLDEND);
 
 	/*
      * That's it - the end of the world
@@ -652,8 +691,12 @@ int main(int argc, char **argv){
     /*
      * Wait until all threads terminate
      */
-
-
+  for(int k = 0; k < NUM_LIZARDS; k++){ //RW
+    allLizards[k]->wait();  //RW
+  }
+  for(int l = 0; l < NUM_CATS; l++){  //RW
+    Cats[l]->wait();  //RW
+  }
 
 
 
@@ -661,13 +704,19 @@ int main(int argc, char **argv){
 	/*
      * Delete the locks and semaphores
      */
-    
+    sem_destroy(&lizSemaphore);
 
 	/*
 	 * Delete all cat and lizard objects
 	 */
+  for(int m = 0; m < NUM_LIZARDS; m++){ //RW
+    delete[] allLizards[m];  //RW
+  }
 
-
+  for(int n = 0; n < NUM_CATS; n++){ //RW
+    delete[] Cats[n]; //RW
+  }
+cout << "\nMax number of lizards crossing at once: " << maxNumCrossing << endl;
 
 	/*
      * Exit happily
